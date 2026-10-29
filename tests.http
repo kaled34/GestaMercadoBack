@@ -1,0 +1,21 @@
+### 1. Actuator Health Check
+GET http://localhost:8080/actuator/health
+Accept: application/json
+
+### 2. Swagger OpenAPI Docs
+GET http://localhost:8080/v3/api-docs
+Accept: application/json
+
+### 3. Login de Usuario (Argon2id)
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "Password123!"
+}
+
+### 4. Consultar Mercados (Requiere Bearer Token)
+GET http://localhost:8080/api/v1/catalogos/mercados
+Authorization: Bearer YOUR_ACCESS_TOKEN_HERE
+Accept: application/json
