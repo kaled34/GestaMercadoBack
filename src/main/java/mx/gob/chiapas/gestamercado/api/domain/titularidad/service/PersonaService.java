@@ -76,9 +76,7 @@ public class PersonaService {
         entity.setCreadoEn(Instant.now());
 
         entity = personaRepository.save(entity);
-
-        PersonaMercadoEntity vinculo = new PersonaMercadoEntity(entity.getId(), dto.mercadoAltaId());
-        personaMercadoRepository.save(vinculo);
+        // El trigger gesta.trg_persona_vinculo vincula automáticamente la persona en gesta.persona_mercado
 
         log.info("Persona creada exitosamente: id={}, tipo={}, mercadoAlta={}", entity.getId(), entity.getTipoPersona(), dto.mercadoAltaId());
         return personaMapper.toDto(entity);

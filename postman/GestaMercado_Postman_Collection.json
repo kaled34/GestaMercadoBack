@@ -1,0 +1,1198 @@
+{
+  "info": {
+    "_postman_id": "c457b920-9a14-4d2c-8b61-3f9a10e48200",
+    "name": "GestaMercado Backend REST API - Suite E2E Newman",
+    "description": "Suite automatizada End-to-End (E2E) para validar los 7 módulos de dominio de GestaMercado (Gobierno del Estado de Chiapas) con PostgreSQL 18, PostGIS, Row Level Security (RLS HMAC-SHA256), Argon2id y JWT.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "00. Monitoreo y Salud (Actuator & OpenAPI)",
+      "item": [
+        {
+          "name": "00.1 Actuator Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en /actuator/health', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Estado del servicio es UP', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('UP');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/actuator/health",
+              "host": ["{{base_url}}"],
+              "path": ["actuator", "health"]
+            }
+          }
+        },
+        {
+          "name": "00.2 Especificación OpenAPI 3 (/v3/api-docs)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en /v3/api-docs', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Contiene definición OpenAPI 3.0+', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.openapi).to.match(/^3\\./);",
+                  "    pm.expect(jsonData.paths).to.be.an('object');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v3/api-docs",
+              "host": ["{{base_url}}"],
+              "path": ["v3", "api-docs"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01. Acceso, Autenticación Argon2id y Sesiones JWT",
+      "item": [
+        {
+          "name": "01.1 Login Rechazado (Credenciales Inválidas - RFC 7807)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 401 Unauthorized ante contraseña incorrecta', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "pm.test('Respuesta cumple estándar RFC 7807 Problem Details', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('title');",
+                  "    pm.expect(jsonData).to.have.property('status', 401);",
+                  "    pm.expect(jsonData).to.have.property('detail');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"ClaveIncorrecta#000\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "01.2 Login Exitoso (Argon2id + Emisión JWT y Refresh Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en Login', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Retorna accessToken, refreshToken, usuarioId y roles', function () {",
+                  "    pm.expect(jsonData.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(jsonData.refreshToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(jsonData.usuarioId).to.be.a('string');",
+                  "    pm.expect(jsonData.roles).to.be.an('array').that.includes('ADMINISTRADOR');",
+                  "});",
+                  "pm.environment.set('access_token', jsonData.accessToken);",
+                  "pm.environment.set('refresh_token', jsonData.refreshToken);",
+                  "pm.environment.set('usuario_id', jsonData.usuarioId);",
+                  "if (jsonData.municipioId) pm.environment.set('municipio_id', String(jsonData.municipioId));",
+                  "if (jsonData.mercadoId) pm.environment.set('mercado_id', String(jsonData.mercadoId));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "01.3 Rotación de Refresh Token (/api/v1/auth/refresh)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK al rotar Refresh Token', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Emite nuevos tokens y revoca el anterior', function () {",
+                  "    pm.expect(jsonData.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(jsonData.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.environment.set('access_token', jsonData.accessToken);",
+                  "pm.environment.set('refresh_token', jsonData.refreshToken);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "01.4 Consultar Perfil de Usuario Autenticado (/api/v1/usuarios/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK al consultar usuario bajo RLS', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Datos del usuario coinciden con la sesión', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('usuario_id'));",
+                  "    pm.expect(jsonData.username).to.eql(pm.environment.get('username'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/usuarios/{{usuario_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "usuarios", "{{usuario_id}}"]
+            }
+          }
+        },
+        {
+          "name": "01.5 Enrolar Dispositivo Móvil de Cobro (/api/v1/dispositivos)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var suffix = Math.floor(1000 + Math.random() * 9000);",
+                  "pm.environment.set('serie_folio_temp', 'JS' + suffix);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al enrolar terminal móvil', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Dispositivo creado con serieFolio y activo=true', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.activo).to.be.true;",
+                  "});",
+                  "pm.environment.set('dispositivo_id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": \"{{usuario_id}}\",\n  \"mercadoId\": {{mercado_id}},\n  \"alias\": \"Terminal Sunmi V2 PRO - Mercado Juan Sabines\",\n  \"modelo\": \"Sunmi V2 PRO\",\n  \"serieFolio\": \"{{serie_folio_temp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/dispositivos",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "dispositivos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Catálogos Institucionales y PostGIS (SRID 4326)",
+      "item": [
+        {
+          "name": "02.1 Listar Municipios Activos (/api/v1/municipios)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en listado de municipios', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "var items = Array.isArray(jsonData) ? jsonData : jsonData.content;",
+                  "pm.test('Existe al menos el municipio de Tuxtla Gutiérrez', function () {",
+                  "    pm.expect(items).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(items[0]).to.have.property('claveInegi');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/municipios",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "municipios"]
+            }
+          }
+        },
+        {
+          "name": "02.2 Consultar Mercado con Polígono GeoJSON (/api/v1/mercados/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK al consultar Mercado', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Incluye polígono GeoJSON SRID 4326 válido', function () {",
+                  "    pm.expect(jsonData.id).to.eql(Number(pm.environment.get('mercado_id')));",
+                  "    pm.expect(jsonData.geomLimite).to.be.an('object');",
+                  "    pm.expect(jsonData.geomLimite.type).to.eql('Polygon');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/mercados/{{mercado_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "mercados", "{{mercado_id}}"]
+            }
+          }
+        },
+        {
+          "name": "02.3 Listar Giros Comerciales (/api/v1/giros-comerciales)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en catálogo de giros comerciales', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "var items = Array.isArray(jsonData) ? jsonData : jsonData.content;",
+                  "pm.test('Contiene giros comerciales semilla (ABARROTES, CARNES, etc.)', function () {",
+                  "    pm.expect(items).to.be.an('array').that.is.not.empty;",
+                  "    pm.environment.set('giro_id', String(items[0].id));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/giros-comerciales",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "giros-comerciales"]
+            }
+          }
+        },
+        {
+          "name": "02.4 Consultar UMA Vigente del Mercado (/api/v1/uma/vigente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en consulta de UMA vigente', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Valor UMA es numérico y mayor a 100', function () {",
+                  "    var valor = Number(pm.response.text());",
+                  "    pm.expect(valor).to.be.above(100);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/uma/vigente?mercadoId={{mercado_id}}&fecha=2026-06-15",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "uma", "vigente"],
+              "query": [
+                {
+                  "key": "mercadoId",
+                  "value": "{{mercado_id}}"
+                },
+                {
+                  "key": "fecha",
+                  "value": "2026-06-15"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "02.5 Crear Zona Interna de Mercado con Polígono PostGIS (/api/v1/zonas-mercado)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var suffix = Math.floor(1000 + Math.random() * 9000);",
+                  "pm.environment.set('zona_nombre_temp', 'Zona Gastronómica Nave ' + suffix);",
+                  "var idx = Math.floor(Math.random() * 900);",
+                  "var col = idx % 30;",
+                  "var row = Math.floor(idx / 30);",
+                  "var lon1 = Number((-93.1169 + col * 0.00005).toFixed(6));",
+                  "var lon2 = Number((lon1 + 0.00003).toFixed(6));",
+                  "var lat1 = Number((16.7511 + row * 0.00005).toFixed(6));",
+                  "var lat2 = Number((lat1 + 0.00003).toFixed(6));",
+                  "pm.environment.set('z_lon1', lon1);",
+                  "pm.environment.set('z_lon2', lon2);",
+                  "pm.environment.set('z_lat1', lat1);",
+                  "pm.environment.set('z_lat2', lat2);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al registrar zona de mercado', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Zona contiene ID y geometría GeoJSON', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('number');",
+                  "    pm.expect(jsonData.geom.type).to.eql('Polygon');",
+                  "});",
+                  "pm.environment.set('zona_id', String(jsonData.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mercadoId\": {{mercado_id}},\n  \"nombre\": \"{{zona_nombre_temp}}\",\n  \"geom\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [{{z_lon1}}, {{z_lat1}}],\n        [{{z_lon2}}, {{z_lat1}}],\n        [{{z_lon2}}, {{z_lat2}}],\n        [{{z_lon1}}, {{z_lat2}}],\n        [{{z_lon1}}, {{z_lat1}}]\n      ]\n    ]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/zonas-mercado",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "zonas-mercado"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Padrón de Locales Comerciales y Asistencias GPS",
+      "item": [
+        {
+          "name": "03.1 Dar de Alta Local Comercial (/api/v1/locales)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var suffix = Math.floor(10000 + Math.random() * 90000);",
+                  "pm.environment.set('numero_local_temp', 'LOC-' + suffix);",
+                  "pm.environment.set('tarjeton_temp', 'TRJ-' + suffix);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al crear local comercial', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Local comercial creado con UUID y área oficial', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.numeroLocal).to.eql(pm.environment.get('numero_local_temp'));",
+                  "    pm.expect(jsonData.areaOficialM2).to.eql(12.5);",
+                  "});",
+                  "pm.environment.set('local_id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mercadoId\": {{mercado_id}},\n  \"zonaId\": {{zona_id}},\n  \"numeroLocal\": \"{{numero_local_temp}}\",\n  \"nombreComercial\": \"Abarrotes La Chiapaneca\",\n  \"folioTarjeton\": \"{{tarjeton_temp}}\",\n  \"tipoEspacio\": \"FIJO\",\n  \"estatus\": \"DESOCUPADO\",\n  \"giroObservadoId\": {{giro_id}},\n  \"areaOficialM2\": 12.50,\n  \"areaOficialMotivo\": \"Dictamen topográfico inicial de padrón\",\n  \"metrosLineales\": 3.50,\n  \"notas\": \"Local de prueba automatizada Newman\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/locales",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "locales"]
+            }
+          }
+        },
+        {
+          "name": "03.2 Consultar Local Comercial por ID (/api/v1/locales/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK al consultar local por ID', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('ID del local coincide', function () {",
+                  "    pm.expect(jsonData.id).to.eql(pm.environment.get('local_id'));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/locales/{{local_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "locales", "{{local_id}}"]
+            }
+          }
+        },
+        {
+          "name": "03.3 Registrar Inspección / Asistencia GPS (/api/v1/asistencias)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al registrar asistencia georreferenciada', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Asistencia incluye coordenadas GeoJSON Point [lon, lat]', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.tipoIncidencia).to.eql('PRESENTE');",
+                  "    pm.expect(jsonData.ubicacion.type).to.eql('Point');",
+                  "});",
+                  "pm.environment.set('asistencia_id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"localId\": \"{{local_id}}\",\n  \"fecha\": \"2026-06-15\",\n  \"tipoIncidencia\": \"PRESENTE\",\n  \"observaciones\": \"Locatario operando con normalidad durante recorrido matutino\",\n  \"ubicacion\": {\n    \"type\": \"Point\",\n    \"coordinates\": [-93.1160, 16.7520]\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/asistencias",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "asistencias"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Titularidad (Personas y Concesiones Comerciales)",
+      "item": [
+        {
+          "name": "04.1 Registrar Persona Física Locataria (/api/v1/personas)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var digits = String(Math.floor(10 + Math.random() * 89));",
+                  "var day = String(Math.floor(10 + Math.random() * 18));",
+                  "var verifier = String(Math.floor(Math.random() * 10));",
+                  "var root10 = 'GOMA8' + digits[0] + '05' + day;",
+                  "var curp = root10 + 'HCSNRM0' + verifier;",
+                  "var rfc = root10 + 'AB' + verifier;",
+                  "pm.environment.set('curp_temp', curp);",
+                  "pm.environment.set('rfc_temp', rfc);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al dar de alta persona física', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Persona registrada con CURP y RFC válidos', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.curp).to.eql(pm.environment.get('curp_temp'));",
+                  "});",
+                  "pm.environment.set('persona_id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipoPersona\": \"FISICA\",\n  \"nombres\": \"MARCO ANTONIO\",\n  \"apellidoPaterno\": \"GOMEZ\",\n  \"apellidoMaterno\": \"MARTINEZ\",\n  \"curp\": \"{{curp_temp}}\",\n  \"rfc\": \"{{rfc_temp}}\",\n  \"telefono\": \"9611234567\",\n  \"correo\": \"locatario.chiapas@example.gob.mx\",\n  \"domicilio\": \"Av. Central Poniente #120, Col. Centro, Tuxtla Gutiérrez\",\n  \"mercadoAltaId\": {{mercado_id}},\n  \"avisoPrivacidadEn\": \"2026-06-01T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/personas",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "personas"]
+            }
+          }
+        },
+        {
+          "name": "04.2 Otorgar Concesión Comercial Formal (/api/v1/concesiones)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var suffix = Math.floor(10000 + Math.random() * 90000);",
+                  "pm.environment.set('expediente_temp', 'EXP-TUX-2026-' + suffix);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al otorgar concesión comercial', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Concesión nace en estado VIGENTE', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.estado).to.eql('VIGENTE');",
+                  "    pm.expect(jsonData.localId).to.eql(pm.environment.get('local_id'));",
+                  "});",
+                  "pm.environment.set('concesion_id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"localId\": \"{{local_id}}\",\n  \"titularPersonaId\": \"{{persona_id}}\",\n  \"giroId\": {{giro_id}},\n  \"esFormal\": true,\n  \"numeroExpediente\": \"{{expediente_temp}}\",\n  \"fechaDictamen\": \"2026-01-15\",\n  \"fechaInicio\": \"2026-01-15\",\n  \"fechaFin\": \"2026-12-31\",\n  \"observaciones\": \"Concesión formalizada en sesión ordinaria de cabildo\",\n  \"esTemporalFeria\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/concesiones",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "concesiones"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Motor Fiscal (Reglas de Mora, Tarifas y Emisión de Cargos)",
+      "item": [
+        {
+          "name": "05.1 Configurar Regla de Mora para el Mercado (/api/v1/reglas-mora)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al registrar regla de mora', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('regla_mora_id', String(jsonData.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"municipioId\": {{municipio_id}},\n  \"mercadoId\": {{mercado_id}},\n  \"porcentajeRecargo\": 1.50,\n  \"diasGracia\": 15,\n  \"fundamentoLegal\": \"Ley de Ingresos Municipal de Tuxtla Gutiérrez 2026\",\n  \"vigenteDesde\": \"2026-01-01\",\n  \"vigenteHasta\": \"2026-12-31\",\n  \"tipoCalculo\": \"SIMPLE\",\n  \"topeMaximoPct\": 100.00\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reglas-mora",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reglas-mora"]
+            }
+          }
+        },
+        {
+          "name": "05.2 Configurar Tarifa Específica para la Zona Creada (/api/v1/tarifas)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al crear tarifa fiscal', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Tarifa activa vinculada a la zona del local', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('number');",
+                  "    pm.expect(jsonData.activo).to.be.true;",
+                  "});",
+                  "pm.environment.set('tarifa_id', String(jsonData.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"municipioId\": {{municipio_id}},\n  \"mercadoId\": {{mercado_id}},\n  \"zonaId\": {{zona_id}},\n  \"tipoEspacio\": \"FIJO\",\n  \"giroId\": {{giro_id}},\n  \"metodoCalculo\": \"POR_M2\",\n  \"valor\": 25.00,\n  \"unidadValor\": \"PESOS\",\n  \"valorBaseMensual\": false,\n  \"metrosLibresBase\": 0,\n  \"cuotaBase\": 0,\n  \"incluirEnLote\": true,\n  \"periodicidad\": \"MENSUAL\",\n  \"cuotaMinima\": 100.00,\n  \"cuotaMaxima\": 5000.00,\n  \"fuente\": \"LEY_INGRESOS\",\n  \"fundamentoLegal\": \"Art. 32 Ley de Ingresos Municipal 2026\",\n  \"vigenteDesde\": \"2026-01-01\",\n  \"vigenteHasta\": \"2026-12-31\",\n  \"formulaCuotaDiaria\": \"ANUAL_365\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/tarifas",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "tarifas"]
+            }
+          }
+        },
+        {
+          "name": "05.3 Calcular Cuota Aplicable al Local (/api/v1/cargos/calcular-cuota)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en motor PL/pgSQL fn_calcular_cuota', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Cálculo de cuota devuelve monto exacto ($312.50 = 12.50 m2 * $25.00)', function () {",
+                  "    pm.expect(jsonData.tarifaId).to.eql(Number(pm.environment.get('tarifa_id')));",
+                  "    pm.expect(jsonData.monto).to.eql(312.5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cargos/calcular-cuota?localId={{local_id}}&fecha=2026-06-01",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cargos", "calcular-cuota"],
+              "query": [
+                {
+                  "key": "localId",
+                  "value": "{{local_id}}"
+                },
+                {
+                  "key": "fecha",
+                  "value": "2026-06-01"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "05.4 Generar Cargo Mensual para el Local (/api/v1/cargos/generar-local)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al emitir cargo fiscal', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Cargo emitido en estado PENDIENTE por $312.50', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.estado).to.eql('PENDIENTE');",
+                  "    pm.expect(jsonData.montoTotal).to.eql(312.5);",
+                  "});",
+                  "pm.environment.set('cargo_id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"localId\": \"{{local_id}}\",\n  \"inicio\": \"2026-06-01\",\n  \"fin\": \"2026-06-30\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cargos/generar-local",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cargos", "generar-local"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Cobranza y Amortización Automática FIFO",
+      "item": [
+        {
+          "name": "06.1 Registrar Pago en Ventanilla Fiscal / Caja (/api/v1/cobranza/caja)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "var suffix = Math.floor(100000 + Math.random() * 900000);",
+                  "pm.environment.set('folio_caja_temp', 'CAJA-2026-' + suffix);",
+                  "pm.environment.set('fecha_pago_iso', new Date().toISOString());"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201 Created al registrar pago en caja', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Pago registrado como VIGENTE y amortizado contra el cargo', function () {",
+                  "    pm.expect(jsonData.id).to.be.a('string');",
+                  "    pm.expect(jsonData.estado).to.eql('VIGENTE');",
+                  "    pm.expect(jsonData.monto).to.eql(312.5);",
+                  "});",
+                  "pm.environment.set('pago_id', jsonData.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"localId\": \"{{local_id}}\",\n  \"folio\": \"{{folio_caja_temp}}\",\n  \"monto\": 312.50,\n  \"fecha\": \"{{fecha_pago_iso}}\",\n  \"formaPago\": \"EFECTIVO\",\n  \"canal\": \"CAJA_POLITICA_FISCAL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/cobranza/caja",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cobranza", "caja"]
+            }
+          }
+        },
+        {
+          "name": "06.2 Verificar Cargo Liquidado (Estado PAGADO) (/api/v1/cargos/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK al consultar cargo amortizado', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('El cargo pasó automáticamente a estado PAGADO', function () {",
+                  "    pm.expect(jsonData.estado).to.eql('PAGADO');",
+                  "    pm.expect(jsonData.montoPagado).to.eql(312.5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cargos/{{cargo_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cargos", "{{cargo_id}}"]
+            }
+          }
+        },
+        {
+          "name": "06.3 Consultar Desglose de Pago Detalle (/api/v1/cobranza/{id}/detalles)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK al consultar detalles de amortización', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Existe registro en pago_detalle vinculando pago y cargo', function () {",
+                  "    pm.expect(jsonData).to.be.an('array').that.is.not.empty;",
+                  "    pm.expect(jsonData[0].cargoId).to.eql(pm.environment.get('cargo_id'));",
+                  "    pm.expect(jsonData[0].montoAplicado).to.eql(312.5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cobranza/{{pago_id}}/detalles",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cobranza", "{{pago_id}}", "detalles"]
+            }
+          }
+        },
+        {
+          "name": "06.4 Verificar Apertura de Jornada del Cobrador (/api/v1/cortes-caja/puede-abrir-jornada)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en validación de apertura de jornada', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cortes-caja/puede-abrir-jornada?cobradorId={{usuario_id}}&mercadoId={{mercado_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cortes-caja", "puede-abrir-jornada"],
+              "query": [
+                {
+                  "key": "cobradorId",
+                  "value": "{{usuario_id}}"
+                },
+                {
+                  "key": "mercadoId",
+                  "value": "{{mercado_id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Reportes Fiscales y Vistas Security Invoker",
+      "item": [
+        {
+          "name": "07.1Consultar Cuota Actual en Vista Consolidada (/api/v1/reportes-fiscales/cuota-actual/local/{id})",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en vista gesta.v_local_cuota_actual', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Vista retorna localId y cuotaPorUnidad', function () {",
+                  "    pm.expect(jsonData.localId).to.eql(pm.environment.get('local_id'));",
+                  "    pm.expect(jsonData.cuotaPorUnidad).to.eql(312.5);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reportes-fiscales/cuota-actual/local/{{local_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reportes-fiscales", "cuota-actual", "local", "{{local_id}}"]
+            }
+          }
+        },
+        {
+          "name": "07.2 Reporte de Efectivo Pendiente de Depósito (/api/v1/reportes-fiscales/efectivo-pendiente-deposito)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en vista gesta.v_efectivo_pendiente_deposito', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "pm.test('Retorna lista de efectivo pendiente de depósito a Hacienda', function () {",
+                  "    pm.expect(jsonData).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reportes-fiscales/efectivo-pendiente-deposito?mercadoId={{mercado_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reportes-fiscales", "efectivo-pendiente-deposito"],
+              "query": [
+                {
+                  "key": "mercadoId",
+                  "value": "{{mercado_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "07.3 Reporte de Alertas Operativas de Padrón (/api/v1/reportes-fiscales/alertas/padron)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200 OK en vista gesta.v_alertas_padron', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reportes-fiscales/alertas/padron?mercadoId={{mercado_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reportes-fiscales", "alertas", "padron"],
+              "query": [
+                {
+                  "key": "mercadoId",
+                  "value": "{{mercado_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "07.4 Cierre de Sesión y Revocación de Refresh Token (/api/v1/auth/logout)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 204 No Content al cerrar sesión', function () {",
+                  "    pm.response.to.have.status(204);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

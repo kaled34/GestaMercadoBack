@@ -58,8 +58,23 @@ public class RlsTransactionAspect {
         } else if (RlsContextHolder.getExplicitUserId() != null) {
             effectiveUserId = RlsContextHolder.getExplicitUserId();
         } else {
-            effectiveUserId = SecurityUtils.getCurrentUserId()
-                    .orElse(rlsProperties.getSystemUserId());
+            effectiveUserId = SecurityUtils.getCurrentUserId().orElse(null);
+        }
+
+        if (effectiveUserId == null) {
+            log.trace("Transacción sin usuario autenticado previo (flujo público/auth); se difiere inyección RLS");
+            return;
+        }
+
+        injectUserContext(effectiveUserId);
+    }
+
+    /**
+     * Inyecta explícitamente el usuario y su firma criptográfica HMAC-SHA256 en la transacción SQL actual.
+     */
+    public void injectUserContext(UUID effectiveUserId) {
+        if (!rlsProperties.isEnabled() || effectiveUserId == null) {
+            return;
         }
 
         try {

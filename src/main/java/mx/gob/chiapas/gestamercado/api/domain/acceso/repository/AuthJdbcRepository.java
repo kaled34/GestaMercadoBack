@@ -49,7 +49,7 @@ public class AuthJdbcRepository {
     ) {}
 
     /**
-     * Invoca gesta.fn_login_obtener(:username::citext).
+     * Invoca gesta.fn_login_obtener(CAST(:username AS public.citext)).
      */
     public Optional<LoginUsuarioData> loginObtener(String username) {
         return jdbcClient.sql("""
@@ -61,7 +61,7 @@ public class AuthJdbcRepository {
                        bloqueado_hasta,
                        mfa_habilitado,
                        mfa_secreto_cifrado
-                  FROM gesta.fn_login_obtener(:username::citext)
+                  FROM gesta.fn_login_obtener(CAST(:username AS public.citext))
                 """)
                 .param("username", username)
                 .query((rs, rowNum) -> {
@@ -87,9 +87,9 @@ public class AuthJdbcRepository {
     public void loginResultado(UUID usuarioId, boolean exito, int maxIntentos, String intervaloBloqueo) {
         jdbcClient.sql("""
                 SELECT gesta.fn_login_resultado(
-                    :usuarioId,
+                    CAST(:usuarioId AS uuid),
                     :exito,
-                    :maxIntentos,
+                    CAST(:maxIntentos AS integer),
                     CAST(:bloqueo AS interval)
                 )
                 """)
@@ -108,12 +108,12 @@ public class AuthJdbcRepository {
         String clientIp = (ip != null && !ip.isBlank()) ? ip : "127.0.0.1";
         return jdbcClient.sql("""
                 SELECT gesta.fn_sesion_emitir(
-                    :usuarioId,
-                    :dispositivoId,
-                    :tokenHash,
-                    :expiraEn,
+                    CAST(:usuarioId AS uuid),
+                    CAST(:dispositivoId AS uuid),
+                    CAST(:tokenHash AS text),
+                    CAST(:expiraEn AS timestamptz),
                     CAST(:ip AS inet),
-                    :userAgent
+                    CAST(:userAgent AS text)
                 )
                 """)
                 .param("usuarioId", usuarioId)
@@ -135,7 +135,7 @@ public class AuthJdbcRepository {
                        usuario_id,
                        dispositivo_id,
                        expira_en
-                  FROM gesta.fn_sesion_validar(:tokenHash)
+                  FROM gesta.fn_sesion_validar(CAST(:tokenHash AS text))
                 """)
                 .param("tokenHash", tokenHash)
                 .query((rs, rowNum) -> new SesionValidadaData(
@@ -152,7 +152,7 @@ public class AuthJdbcRepository {
      */
     public boolean sesionRevocar(String tokenHash) {
         return Boolean.TRUE.equals(jdbcClient.sql("""
-                SELECT gesta.fn_sesion_revocar(:tokenHash)
+                SELECT gesta.fn_sesion_revocar(CAST(:tokenHash AS text))
                 """)
                 .param("tokenHash", tokenHash)
                 .query(Boolean.class)
@@ -164,7 +164,7 @@ public class AuthJdbcRepository {
      */
     public void usuarioSetPassword(UUID usuarioId, String passwordHash) {
         jdbcClient.sql("""
-                SELECT gesta.fn_usuario_set_password(:usuarioId, :passwordHash)
+                SELECT gesta.fn_usuario_set_password(CAST(:usuarioId AS uuid), CAST(:passwordHash AS text))
                 """)
                 .param("usuarioId", usuarioId)
                 .param("passwordHash", passwordHash)
@@ -177,10 +177,38 @@ public class AuthJdbcRepository {
      */
     public void usuarioSetMfa(boolean habilitado, byte[] secretoCifrado) {
         jdbcClient.sql("""
-                SELECT gesta.fn_usuario_set_mfa(:habilitado, :secretoCifrado)
+                SELECT gesta.fn_usuario_set_mfa(:habilitado, CAST(:secretoCifrado AS bytea))
                 """)
                 .param("habilitado", habilitado)
                 .param("secretoCifrado", secretoCifrado)
+                .query()
+                .singleRow();
+    }
+
+    /**
+     * Provisiona o rota el secreto HMAC-SHA256 de un dispositivo móvil invocando
+     * gesta.fn_dispositivo_rotar_secreto_hmac(p_dispositivo, p_secreto_hex).
+     */
+    public String dispositivoRotarSecretoHmac(UUID dispositivoId, String secretoHex) {
+        return jdbcClient.sql("""
+                SELECT gesta.fn_dispositivo_rotar_secreto_hmac(CAST(:dispositivoId AS uuid), CAST(:secretoHex AS text))
+                """)
+                .param("dispositivoId", dispositivoId)
+                .param("secretoHex", secretoHex)
+                .query(String.class)
+                .single();
+    }
+
+    /**
+     * Activa o desactiva un dispositivo móvil mediante gesta.fn_dispositivo_set_activo.
+     */
+    public void dispositivoSetActivo(UUID dispositivoId, boolean activo, String motivo) {
+        jdbcClient.sql("""
+                SELECT gesta.fn_dispositivo_set_activo(CAST(:dispositivoId AS uuid), :activo, CAST(:motivo AS text))
+                """)
+                .param("dispositivoId", dispositivoId)
+                .param("activo", activo)
+                .param("motivo", motivo)
                 .query()
                 .singleRow();
     }

@@ -52,7 +52,7 @@ public class UmaController {
         return ResponseEntity.ok(umaService.listarOficiales());
     }
 
-    @GetMapping("/valor-aplicable")
+    @GetMapping({"/valor-aplicable", "/vigente"})
     @Operation(summary = "Calcular valor UMA aplicable", description = "Invoca gesta.fn_valor_uma para determinar el valor diario exacto.")
     public ResponseEntity<BigDecimal> obtenerValorUma(
             @RequestParam("mercadoId") Long mercadoId,

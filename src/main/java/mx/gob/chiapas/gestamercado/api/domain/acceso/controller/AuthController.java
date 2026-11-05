@@ -55,8 +55,14 @@ public class AuthController {
 
     @PostMapping("/logout")
     @Operation(summary = "Cierre de sesión", description = "Revoca la sesión activa en gesta.sesion_refresh.")
-    public ResponseEntity<Void> logout(@RequestParam("refreshToken") String refreshToken) {
-        authService.logout(refreshToken);
+    public ResponseEntity<Void> logout(
+            @RequestParam(value = "refreshToken", required = false) String refreshTokenParam,
+            @RequestBody(required = false) RefreshTokenRequestDto body
+    ) {
+        String token = (refreshTokenParam != null && !refreshTokenParam.isBlank())
+                ? refreshTokenParam
+                : (body != null ? body.refreshToken() : null);
+        authService.logout(token);
         return ResponseEntity.noContent().build();
     }
 

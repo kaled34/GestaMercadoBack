@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -16,13 +17,13 @@ public class DispositivoEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "id", nullable = false)
+    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "usuario_id", nullable = false)
+    @Column(name = "usuario_id", nullable = false, updatable = false)
     private UUID usuarioId;
 
-    @Column(name = "mercado_id")
+    @Column(name = "mercado_id", updatable = false)
     private Long mercadoId;
 
     @Column(name = "alias", length = 80)
@@ -31,19 +32,24 @@ public class DispositivoEntity {
     @Column(name = "modelo", length = 80)
     private String modelo;
 
-    @Column(name = "serie_folio", nullable = false, length = 10, unique = true)
+    @Column(name = "serie_folio", nullable = false, length = 10, unique = true, updatable = false)
     private String serieFolio;
 
-    @Column(name = "ultima_sincronizacion")
+    @Column(name = "ultima_sincronizacion", insertable = false, updatable = false)
     private Instant ultimaSincronizacion;
 
-    @Column(name = "activo", nullable = false)
+    @Column(name = "activo", nullable = false, insertable = false, updatable = false)
     private boolean activo = true;
 
-    @Column(name = "ultimo_consecutivo", nullable = false)
+    @Column(name = "ultimo_consecutivo", nullable = false, insertable = false, updatable = false)
     private long ultimoConsecutivo = 0;
 
-    @Column(name = "secreto_hmac", nullable = false)
+    /**
+     * El rol gesta_app no tiene permisos SELECT/INSERT directos sobre secreto_hmac;
+     * el trigger trg_dispositivo_protege y la función fn_dispositivo_rotar_secreto_hmac
+     * gestionan el secreto criptográfico en base de datos.
+     */
+    @Transient
     private byte[] secretoHmac;
 
     public DispositivoEntity() {

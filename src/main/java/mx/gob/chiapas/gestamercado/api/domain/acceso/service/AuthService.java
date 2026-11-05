@@ -3,6 +3,7 @@ package mx.gob.chiapas.gestamercado.api.domain.acceso.service;
 import mx.gob.chiapas.gestamercado.api.common.exception.BusinessRuleException;
 import mx.gob.chiapas.gestamercado.api.common.exception.ResourceNotFoundException;
 import mx.gob.chiapas.gestamercado.api.common.exception.UnauthorizedException;
+import mx.gob.chiapas.gestamercado.api.config.RlsTransactionAspect;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.dto.ChangePasswordRequestDto;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.dto.ConfigureMfaRequestDto;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.dto.LoginRequestDto;
@@ -36,18 +37,23 @@ public class AuthService {
     private final UsuarioJpaRepository usuarioJpaRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
+    private final RlsTransactionAspect rlsTransactionAspect;
 
     public AuthService(AuthJdbcRepository authJdbcRepository,
                        UsuarioJpaRepository usuarioJpaRepository,
                        JwtTokenProvider jwtTokenProvider,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       RlsTransactionAspect rlsTransactionAspect) {
         this.authJdbcRepository = authJdbcRepository;
         this.usuarioJpaRepository = usuarioJpaRepository;
         this.jwtTokenProvider = jwtTokenProvider;
         this.passwordEncoder = passwordEncoder;
+        this.rlsTransactionAspect = rlsTransactionAspect;
     }
 
-    @Transactional
+    private static final String BOOTSTRAP_PREFIX = "{BOOTSTRAP}";
+
+    @Transactional(noRollbackFor = {BadCredentialsException.class, UnauthorizedException.class})
     public LoginResponseDto login(LoginRequestDto request, String clientIp, String userAgent) {
         // 1. Obtención segura de credenciales e intentos fallidos vía PL/pgSQL
         var loginDataOpt = authJdbcRepository.loginObtener(request.username());
@@ -68,9 +74,16 @@ public class AuthService {
                     + loginData.bloqueadoHasta());
         }
 
-        // 2. Validación de contraseña mediante Argon2id
-        boolean matches = loginData.passwordHash() != null &&
-                passwordEncoder.matches(request.password(), loginData.passwordHash());
+        // 2. Validación de contraseña mediante Argon2id (con soporte de migración {BOOTSTRAP} en primer acceso)
+        String storedHash = loginData.passwordHash();
+        boolean isBootstrap = storedHash != null && storedHash.startsWith(BOOTSTRAP_PREFIX);
+        boolean matches;
+        if (isBootstrap) {
+            String expectedPlain = storedHash.substring(BOOTSTRAP_PREFIX.length());
+            matches = expectedPlain.equals(request.password());
+        } else {
+            matches = storedHash != null && passwordEncoder.matches(request.password(), storedHash);
+        }
 
         if (!matches) {
             // Registro de fallo con incremento de intentos y eventual bloqueo por 15 minutos (CU-01 / CU-02)
@@ -82,7 +95,17 @@ public class AuthService {
         // 3. Registro de éxito (resetea intentos_fallidos a 0 y actualiza ultimo_acceso)
         authJdbcRepository.loginResultado(loginData.id(), true, 5, "15 minutes");
 
-        // 4. Consulta de roles y alcances activos del usuario
+        // 4. Inyección de identidad RLS con firma HMAC para consultar gesta.usuario y gesta.usuario_rol
+        rlsTransactionAspect.injectUserContext(loginData.id());
+
+        // Si la cuenta tenía semilla {BOOTSTRAP}, se cifra inmediatamente con Argon2id y se persiste en BD
+        if (isBootstrap) {
+            String argon2Hash = passwordEncoder.encode(request.password());
+            authJdbcRepository.usuarioSetPassword(loginData.id(), argon2Hash);
+            log.info("Contraseña semilla migrada automáticamente a hash Argon2id para usuario '{}'", request.username());
+        }
+
+        // 5. Consulta de roles y alcances activos del usuario
         UsuarioEntity usuarioEntity = usuarioJpaRepository.findByIdWithRoles(loginData.id())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", loginData.id()));
 
@@ -159,6 +182,9 @@ public class AuthService {
 
         // Rotación obligatoria de token: revocar el anterior para evitar reutilización
         authJdbcRepository.sesionRevocar(tokenHash);
+
+        // Inyección de identidad RLS con firma HMAC para consultar gesta.usuario y gesta.usuario_rol
+        rlsTransactionAspect.injectUserContext(sesion.usuarioId());
 
         UsuarioEntity usuarioEntity = usuarioJpaRepository.findByIdWithRoles(sesion.usuarioId())
                 .orElseThrow(() -> new ResourceNotFoundException("Usuario", sesion.usuarioId()));

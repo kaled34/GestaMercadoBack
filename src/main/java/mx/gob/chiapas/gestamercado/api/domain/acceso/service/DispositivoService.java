@@ -7,6 +7,7 @@ import mx.gob.chiapas.gestamercado.api.domain.acceso.dto.DispositivoResponseDto;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.dto.DispositivoUpdateDto;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.mapper.DispositivoMapper;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.model.DispositivoEntity;
+import mx.gob.chiapas.gestamercado.api.domain.acceso.repository.AuthJdbcRepository;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.repository.DispositivoJpaRepository;
 import mx.gob.chiapas.gestamercado.api.domain.acceso.repository.UsuarioJpaRepository;
 import org.slf4j.Logger;
@@ -16,7 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
+import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
@@ -26,14 +27,16 @@ public class DispositivoService {
 
     private final DispositivoJpaRepository dispositivoJpaRepository;
     private final UsuarioJpaRepository usuarioJpaRepository;
+    private final AuthJdbcRepository authJdbcRepository;
     private final DispositivoMapper dispositivoMapper;
-    private final SecureRandom secureRandom = new SecureRandom();
 
     public DispositivoService(DispositivoJpaRepository dispositivoJpaRepository,
                               UsuarioJpaRepository usuarioJpaRepository,
+                              AuthJdbcRepository authJdbcRepository,
                               DispositivoMapper dispositivoMapper) {
         this.dispositivoJpaRepository = dispositivoJpaRepository;
         this.usuarioJpaRepository = usuarioJpaRepository;
+        this.authJdbcRepository = authJdbcRepository;
         this.dispositivoMapper = dispositivoMapper;
     }
 
@@ -49,10 +52,6 @@ public class DispositivoService {
             throw new ResourceNotFoundException("Usuario", dto.usuarioId());
         }
 
-        // Generar clave secreta HMAC-SHA256 de 32 bytes (256 bits) para firma de cobros offline
-        byte[] secretoHmac = new byte[32];
-        secureRandom.nextBytes(secretoHmac);
-
         DispositivoEntity dispositivo = new DispositivoEntity();
         dispositivo.setUsuarioId(dto.usuarioId());
         dispositivo.setMercadoId(dto.mercadoId());
@@ -61,9 +60,15 @@ public class DispositivoService {
         dispositivo.setSerieFolio(serie);
         dispositivo.setActivo(true);
         dispositivo.setUltimoConsecutivo(0L);
-        dispositivo.setSecretoHmac(secretoHmac);
 
-        dispositivo = dispositivoJpaRepository.save(dispositivo);
+        dispositivo = dispositivoJpaRepository.saveAndFlush(dispositivo);
+
+        // Obtener/provisionar clave simétrica HMAC-SHA256 de 256 bits vía función SECURITY DEFINER
+        String secretoHex = authJdbcRepository.dispositivoRotarSecretoHmac(dispositivo.getId(), null);
+        if (secretoHex != null && !secretoHex.isBlank()) {
+            dispositivo.setSecretoHmac(HexFormat.of().parseHex(secretoHex));
+        }
+
         log.info("Dispositivo enrolado con serie '{}' y ID {}", serie, dispositivo.getId());
         return dispositivoMapper.toDto(dispositivo);
     }
@@ -106,11 +111,14 @@ public class DispositivoService {
         if (dto.modelo() != null) {
             dispositivo.setModelo(dto.modelo());
         }
-        if (dto.activo() != null) {
+
+        dispositivo = dispositivoJpaRepository.saveAndFlush(dispositivo);
+
+        if (dto.activo() != null && dto.activo() != dispositivo.isActivo()) {
+            authJdbcRepository.dispositivoSetActivo(id, dto.activo(), "Actualización administrativa vía API");
             dispositivo.setActivo(dto.activo());
         }
 
-        dispositivo = dispositivoJpaRepository.save(dispositivo);
         log.info("Dispositivo {} actualizado", id);
         return dispositivoMapper.toDto(dispositivo);
     }
@@ -120,11 +128,11 @@ public class DispositivoService {
         DispositivoEntity dispositivo = dispositivoJpaRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Dispositivo", id));
 
-        byte[] nuevoSecreto = new byte[32];
-        secureRandom.nextBytes(nuevoSecreto);
-        dispositivo.setSecretoHmac(nuevoSecreto);
+        String nuevoSecretoHex = authJdbcRepository.dispositivoRotarSecretoHmac(id, null);
+        if (nuevoSecretoHex != null && !nuevoSecretoHex.isBlank()) {
+            dispositivo.setSecretoHmac(HexFormat.of().parseHex(nuevoSecretoHex));
+        }
 
-        dispositivo = dispositivoJpaRepository.save(dispositivo);
         log.info("Clave simétrica HMAC rotada para el dispositivo {}", id);
         return dispositivoMapper.toDto(dispositivo);
     }

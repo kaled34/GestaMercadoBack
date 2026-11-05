@@ -87,14 +87,14 @@ public class CobranzaJdbcRepository {
 
         return jdbcClient.sql("""
                 SELECT gesta.fn_registrar_pago_caja(
-                    :localId,
-                    :folio,
+                    CAST(:localId AS uuid),
+                    CAST(:folio AS text),
                     :monto,
-                    :fecha,
+                    CAST(:fecha AS timestamptz),
                     CAST(:formaPago AS gesta.forma_pago),
                     CAST(:canal AS gesta.canal_cobro),
-                    :loteId,
-                    :hashFila
+                    CAST(:loteId AS uuid),
+                    CAST(:hashFila AS text)
                 )
                 """)
                 .param("localId", dto.localId())

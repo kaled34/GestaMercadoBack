@@ -54,6 +54,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (roles != null) {
                 for (String rol : roles) {
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + rol));
+                    // Homologación con claves de gesta.rol en PostgreSQL (ADMINISTRADOR, TESORERIA, INSPECTOR, LOCATARIO)
+                    switch (rol) {
+                        case "ADMINISTRADOR" -> {
+                            authorities.add(new SimpleGrantedAuthority("ROLE_SUPERADMIN"));
+                            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN_MERCADO"));
+                            authorities.add(new SimpleGrantedAuthority("ROLE_COBRADOR"));
+                            authorities.add(new SimpleGrantedAuthority("ROLE_CONSULTA"));
+                        }
+                        case "TESORERIA" -> {
+                            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN_MERCADO"));
+                            authorities.add(new SimpleGrantedAuthority("ROLE_CONSULTA"));
+                        }
+                        case "INSPECTOR" -> {
+                            authorities.add(new SimpleGrantedAuthority("ROLE_COBRADOR"));
+                            authorities.add(new SimpleGrantedAuthority("ROLE_CONSULTA"));
+                        }
+                        case "LOCATARIO" -> authorities.add(new SimpleGrantedAuthority("ROLE_CONSULTA"));
+                        default -> { }
+                    }
                 }
             }
 
